@@ -67,11 +67,15 @@ jobs:
     # macOS Universal merge
     - name: macOS Intel rename
       if: matrix.os == 'macos-latest' && matrix.arch == 'amd64'
-      run: mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
+      run: |
+        mkdir -p build/bin/macos/amd64
+        mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
 
     - name: macOS ARM merge
       if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
       run: |
+        mkdir -p build/bin/macos/arm64
+        mkdir -p build/bin/macos/Universal
         mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
         cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
         lipo -create \
