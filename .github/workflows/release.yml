@@ -95,12 +95,17 @@ jobs:
             -output build/bin/macos/Universal/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}
           codesign --deep --force --sign - build/bin/macos/Universal/${{ env.APP_NAME }}.app
 
+      - name: Zip macOS Universal app
+        run: |
+          cd build/bin/macos/Universal
+          zip -r IrisAura-macos-Universal.zip IrisAura.app
+
       - name: Upload macOS Universal release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
           name: IrisAura-macos-Universal
-          files: build/bin/macos/Universal/*
+          files: build/bin/macos/Universal/IrisAura-macos-Universal.zip
           token: ${{ secrets.GH_TOKEN }}
 
   # ==========================
@@ -110,7 +115,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        arch: [amd64]
     steps:
       - uses: actions/checkout@v3
 
