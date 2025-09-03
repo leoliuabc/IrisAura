@@ -39,9 +39,8 @@ jobs:
       - name: Build frontend
         working-directory: ${{ env.FRONTEND_DIR }}
         run: |
-          npm install
+          npm ci
           npm run build
-          npm audit fix --force
 
       - name: Go mod tidy & download
         run: |
@@ -53,10 +52,13 @@ jobs:
       # ----------------------
       - name: Build Intel (amd64)
         run: |
-          GOOS=darwin
-          GOARCH=amd64
-          wails build -platform $GOOS/$GOARCH
+          echo "🔹 Building Intel (amd64)..."
+          GOOS=darwin GOARCH=amd64 wails build -platform darwin/amd64
           mkdir -p build/bin/macos/amd64
+          if [ ! -d build/bin/${{ env.APP_NAME }}.app ]; then
+            echo "❌ Intel build failed: app not found!"
+            exit 1
+          fi
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
 
       # ----------------------
@@ -64,10 +66,13 @@ jobs:
       # ----------------------
       - name: Build ARM64
         run: |
-          GOOS=darwin
-          GOARCH=arm64
-          wails build -platform $GOOS/$GOARCH
+          echo "🔹 Building ARM64..."
+          GOOS=darwin GOARCH=arm64 wails build -platform darwin/arm64
           mkdir -p build/bin/macos/arm64
+          if [ ! -d build/bin/${{ env.APP_NAME }}.app ]; then
+            echo "❌ ARM64 build failed: app not found!"
+            exit 1
+          fi
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
 
       # ----------------------
@@ -75,7 +80,16 @@ jobs:
       # ----------------------
       - name: Create Universal app
         run: |
+          echo "🔹 Creating Universal app..."
           mkdir -p build/bin/macos/Universal
+          if [ ! -d build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app ]; then
+            echo "❌ Intel app missing, cannot merge!"
+            exit 1
+          fi
+          if [ ! -d build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app ]; then
+            echo "❌ ARM64 app missing, cannot merge!"
+            exit 1
+          fi
           cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
           lipo -create \
             build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app/Contents/MacOS/${{ env.APP_NAME }} \
@@ -119,9 +133,8 @@ jobs:
       - name: Build frontend
         working-directory: ${{ env.FRONTEND_DIR }}
         run: |
-          npm install
+          npm ci
           npm run build
-          npm audit fix --force
 
       - name: Go mod tidy & download
         run: |
@@ -131,9 +144,12 @@ jobs:
       - name: Build Wails app
         shell: bash
         run: |
-          GOOS=windows
-          GOARCH=${{ matrix.arch }}
-          wails build -platform $GOOS/$GOARCH
+          echo "🔹 Building Windows (${{ matrix.arch }})..."
+          GOOS=windows GOARCH=${{ matrix.arch }} wails build -platform windows/${{ matrix.arch }}
+          if [ ! -f build/bin/${{ env.APP_NAME }}.exe ]; then
+            echo "❌ Windows build failed: exe not found!"
+            exit 1
+          fi
 
       - name: Organize Windows build
         shell: bash
