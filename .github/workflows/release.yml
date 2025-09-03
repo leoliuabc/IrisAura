@@ -89,7 +89,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: IrisAura-macos-Universal
           files: build/bin/macos/Universal/*
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
 
   # ==========================
   # Windows 构建
@@ -147,4 +147,4 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: IrisAura-Windows-${{ matrix.arch }}
           files: build/bin/windows/${{ matrix.arch }}/*
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
