@@ -17,9 +17,6 @@ jobs:
   # ==========================
   macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -51,26 +48,34 @@ jobs:
           go mod tidy
           go mod download
 
-      - name: Build Wails app
+      # ----------------------
+      # 构建 Intel
+      # ----------------------
+      - name: Build Intel (amd64)
         run: |
           GOOS=darwin
-          GOARCH=${{ matrix.arch }}
+          GOARCH=amd64
           wails build -platform $GOOS/$GOARCH
-
-      - name: Organize build directories
-        run: |
           mkdir -p build/bin/macos/amd64
-          mkdir -p build/bin/macos/arm64
-          mkdir -p build/bin/macos/Universal
-          if [ "${{ matrix.arch }}" == "amd64" ]; then
-            mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
-          else
-            mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
-          fi
+          mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
 
-      - name: Create macOS Universal
-        if: matrix.arch == 'arm64'
+      # ----------------------
+      # 构建 ARM64
+      # ----------------------
+      - name: Build ARM64
         run: |
+          GOOS=darwin
+          GOARCH=arm64
+          wails build -platform $GOOS/$GOARCH
+          mkdir -p build/bin/macos/arm64
+          mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
+
+      # ----------------------
+      # 合并 Universal
+      # ----------------------
+      - name: Create Universal app
+        run: |
+          mkdir -p build/bin/macos/Universal
           cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
           lipo -create \
             build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app/Contents/MacOS/${{ env.APP_NAME }} \
@@ -79,7 +84,6 @@ jobs:
           codesign --deep --force --sign - build/bin/macos/Universal/${{ env.APP_NAME }}.app
 
       - name: Upload macOS Universal release
-        if: matrix.arch == 'arm64'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
