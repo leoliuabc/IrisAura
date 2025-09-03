@@ -4,97 +4,143 @@ on:
   push:
     tags:
       - 'v1.0.0'
+  workflow_dispatch: # 可手动触发
+
+env:
+  APP_NAME: IrisAura
+  BUILD_DIR: build
+  FRONTEND_DIR: frontend
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
+  # ==========================
+  # macOS 构建 + Universal
+  # ==========================
+  macos:
+    runs-on: macos-latest
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
         arch: [amd64, arm64]
-
-    env:
-      APP_NAME: IrisAura
-      BUILD_DIR: build
-      FRONTEND_DIR: frontend
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
 
-    - name: Install Wails CLI
-      run: |
-        go install github.com/wailsapp/wails/v2/cmd/wails@latest
-        echo "${{ github.workspace }}/go/bin" >> $GITHUB_PATH
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          echo "${{ github.workspace }}/go/bin" >> $GITHUB_PATH
 
-    - name: Install Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-    - name: Build frontend
-      working-directory: ${{ env.FRONTEND_DIR }}
-      run: |
-        npm install
-        npm run build
-        npm audit fix --force
+      - name: Build frontend
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          npm install
+          npm run build
+          npm audit fix --force
 
-    - name: Go mod tidy & download
-      run: |
-        go mod tidy
-        go mod download
+      - name: Go mod tidy & download
+        run: |
+          go mod tidy
+          go mod download
 
-    - name: Create build directory
-      run: mkdir -p ${{ env.BUILD_DIR }}/bin/${{ matrix.os }}/${{ matrix.arch }}
+      - name: Build Wails app
+        run: |
+          GOOS=darwin
+          GOARCH=${{ matrix.arch }}
+          wails build -platform $GOOS/$GOARCH
 
-    - name: Build macOS
-      if: matrix.os == 'macos-latest'
-      run: |
-        GOOS=darwin
-        GOARCH=${{ matrix.arch }}
-        wails build -platform $GOOS/$GOARCH
+      - name: Organize build directories
+        run: |
+          mkdir -p build/bin/macos/amd64
+          mkdir -p build/bin/macos/arm64
+          mkdir -p build/bin/macos/Universal
+          if [ "${{ matrix.arch }}" == "amd64" ]; then
+            mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
+          else
+            mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
+          fi
 
-    - name: Build Windows
-      if: matrix.os == 'windows-latest'
-      run: |
-        GOOS=windows
-        GOARCH=${{ matrix.arch }}
-        wails build -platform $GOOS/$GOARCH
+      - name: Create macOS Universal
+        if: matrix.arch == 'arm64'
+        run: |
+          cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
+          lipo -create \
+            build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app/Contents/MacOS/${{ env.APP_NAME }} \
+            build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app/Contents/MacOS/${{ env.APP_NAME }} \
+            -output build/bin/macos/Universal/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}
+          codesign --deep --force --sign - build/bin/macos/Universal/${{ env.APP_NAME }}.app
 
-    # macOS Universal merge
-    - name: macOS Intel rename
-      if: matrix.os == 'macos-latest' && matrix.arch == 'amd64'
-      run: |
-        mkdir -p build/bin/macos/amd64
-        mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
+      - name: Upload macOS Universal release
+        if: matrix.arch == 'arm64'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: IrisAura-macos-Universal
+          files: build/bin/macos/Universal/*
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: macOS ARM merge
-      if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
-      run: |
-        mkdir -p build/bin/macos/arm64
-        mkdir -p build/bin/macos/Universal
-        mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
-        cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
-        lipo -create \
-          build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app/Contents/MacOS/${{ env.APP_NAME }} \
-          build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app/Contents/MacOS/${{ env.APP_NAME }} \
-          -output build/bin/macos/Universal/${{ env.APP_NAME }}.app/Contents/MacOS/${{ env.APP_NAME }}
-        codesign --deep --force --sign - build/bin/macos/Universal/${{ env.APP_NAME }}.app
+  # ==========================
+  # Windows 构建
+  # ==========================
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    # Windows exe rename
-    - name: Windows rename
-      if: matrix.os == 'windows-latest'
-      run: mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/${{ matrix.arch }}/${{ env.APP_NAME }}-${{ matrix.arch }}.exe
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
 
-    # Upload release for this platform
-    - name: Upload release assets
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.ref_name }}
-        name: ${{ env.APP_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
-        asset_path: build/bin/${{ matrix.os }}/${{ matrix.arch }}
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          npm install
+          npm run build
+          npm audit fix --force
+
+      - name: Go mod tidy & download
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Build Wails app
+        shell: bash
+        run: |
+          GOOS=windows
+          GOARCH=${{ matrix.arch }}
+          wails build -platform $GOOS/$GOARCH
+
+      - name: Organize Windows build
+        shell: bash
+        run: |
+          mkdir -p build/bin/windows/${{ matrix.arch }}
+          mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/${{ matrix.arch }}/${{ env.APP_NAME }}-${{ matrix.arch }}.exe
+
+      - name: Upload Windows release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: IrisAura-Windows-${{ matrix.arch }}
+          files: build/bin/windows/${{ matrix.arch }}/*
+          token: ${{ secrets.GITHUB_TOKEN }}
