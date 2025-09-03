@@ -58,10 +58,6 @@ jobs:
           GOOS=darwin
           GOARCH=${{ matrix.arch }}
           wails build -platform $GOOS/$GOARCH
-        elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-          GOOS=linux
-          GOARCH=${{ matrix.arch }}
-          wails build -platform $GOOS/$GOARCH
         elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
           GOOS=windows
           GOARCH=${{ matrix.arch }}
@@ -88,11 +84,6 @@ jobs:
     - name: Windows rename
       if: matrix.os == 'windows-latest'
       run: mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/${{ matrix.arch }}/${{ env.APP_NAME }}-${{ matrix.arch }}.exe
-
-    # Linux rename
-    - name: Linux rename
-      if: matrix.os == 'ubuntu-latest'
-      run: mv build/bin/${{ env.APP_NAME }} build/bin/linux/${{ matrix.arch }}/${{ env.APP_NAME }}
 
     # Upload release for this platform
     - name: Upload release assets
