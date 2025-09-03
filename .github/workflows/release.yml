@@ -3,7 +3,7 @@ name: Build IrisAura
 on:
   push:
     tags:
-      - 'v1.0.0'
+      - 'v*.*.*'
   workflow_dispatch:
 
 env:
