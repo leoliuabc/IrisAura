@@ -52,17 +52,19 @@ jobs:
     - name: Create build directory
       run: mkdir -p ${{ env.BUILD_DIR }}/bin/${{ matrix.os }}/${{ matrix.arch }}
 
-    - name: Build IrisAura
+    - name: Build macOS
+      if: matrix.os == 'macos-latest'
       run: |
-        if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-          GOOS=darwin
-          GOARCH=${{ matrix.arch }}
-          wails build -platform $GOOS/$GOARCH
-        elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          GOOS=windows
-          GOARCH=${{ matrix.arch }}
-          wails build -platform $GOOS/$GOARCH
-        fi
+        GOOS=darwin
+        GOARCH=${{ matrix.arch }}
+        wails build -platform $GOOS/$GOARCH
+
+    - name: Build Windows
+      if: matrix.os == 'windows-latest'
+      run: |
+        GOOS=windows
+        GOARCH=${{ matrix.arch }}
+        wails build -platform $GOOS/$GOARCH
 
     # macOS Universal merge
     - name: macOS Intel rename
