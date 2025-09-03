@@ -3,7 +3,7 @@ name: Build IrisAura
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v1.0.0'
   workflow_dispatch:
 
 env:
@@ -18,15 +18,19 @@ jobs:
   macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - uses: actions/setup-go@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21'
 
-      - run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - uses: actions/setup-node@v4
+      - name: Install Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -41,30 +45,50 @@ jobs:
           go mod tidy
           go mod download
 
-      - name: Prepare macOS directories
+      - name: Prepare directories
         run: |
           mkdir -p build/bin/macos/amd64
           mkdir -p build/bin/macos/arm64
           mkdir -p build/bin/macos/Universal
 
+      # ----------------------
+      # 构建 Intel
+      # ----------------------
       - name: Build Intel (amd64)
         run: |
           echo "🔹 Building Intel (amd64)..."
           wails build -platform darwin/amd64
+          if [ ! -d "build/bin/${{ env.APP_NAME }}.app" ]; then
+            echo "Intel build failed!"
+            exit 1
+          fi
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
 
+      # ----------------------
+      # 构建 ARM64
+      # ----------------------
       - name: Build ARM64
         run: |
           echo "🔹 Building ARM64..."
           wails build -platform darwin/arm64
+          if [ ! -d "build/bin/${{ env.APP_NAME }}.app" ]; then
+            echo "ARM64 build failed!"
+            exit 1
+          fi
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
 
+      # ----------------------
+      # 构建 Universal
+      # ----------------------
       - name: Build Universal
         run: |
           echo "🔹 Creating macOS Universal..."
-          # 先复制 Intel
+          # 确认 Intel + ARM64 文件存在
+          if [ ! -d "build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app" ] || [ ! -d "build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app" ]; then
+            echo "Intel or ARM64 build missing!"
+            exit 1
+          fi
           cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
-          # 再合并二进制
           lipo -create \
             build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app/Contents/MacOS/${{ env.APP_NAME }} \
             build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app/Contents/MacOS/${{ env.APP_NAME }} \
@@ -111,15 +135,18 @@ jobs:
           go mod tidy
           go mod download
 
-      - name: Prepare Windows directories
+      - name: Prepare directories
         run: |
-          mkdir -p build/bin/windows/amd64
-          mkdir -p build/bin/windows/arm64
+          mkdir -p build/bin/windows/${{ matrix.arch }}
 
       - name: Build Windows
         shell: bash
         run: |
           GOOS=windows GOARCH=${{ matrix.arch }} wails build -platform windows/${{ matrix.arch }}
+          if [ ! -f "build/bin/${{ env.APP_NAME }}.exe" ]; then
+            echo "Windows build failed!"
+            exit 1
+          fi
           mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/${{ matrix.arch }}/${{ env.APP_NAME }}-${{ matrix.arch }}.exe
 
       - name: Upload Windows release
