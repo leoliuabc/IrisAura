@@ -1,0 +1,164 @@
+/* 基础设置 */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 30px;
+    min-height: 100vh;  /* 保证全屏但不溢出 */
+    background: #f7f8fa; /* 更柔和的浅灰背景 */
+    color: #333333;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* 主容器卡片 */
+#app {
+    width: 100%;
+    max-width: 720px;
+    background: #ffffff;
+    padding: 28px;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* logo */
+.logo {
+    display: block;
+    margin: 0 auto 20px;
+    width: 140px;
+}
+
+/* 控件容器 */
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px; /* 行间距比之前小一些 */
+    margin-bottom: 20px;
+}
+
+/* 输入+按钮行 */
+.input-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.input-row input[type="text"],
+.input-row input[type="number"],
+.input-row select {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #d0d5dd;
+    font-size: 0.95rem;
+    background-color: #f9fafb;
+    color: #333;
+    transition: all 0.2s ease;
+}
+
+.input-row input:focus,
+.input-row select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.18);
+}
+
+/* 行内按钮 */
+.input-row button {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.input-row button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
+}
+
+/* 滑块、复选框行 */
+.range-row, .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.range-row label,
+.checkbox-row label {
+    font-size: 0.9rem;
+    color: #444;
+}
+
+.range-row input[type="range"] {
+    flex: 1;
+}
+
+.checkbox-row input[type="checkbox"] {
+    transform: scale(1.1);
+}
+
+/* 主操作按钮 */
+#compressBtn {
+    width: 100%;
+    padding: 12px 0;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+#compressBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(102, 126, 234, 0.25);
+}
+
+/* 加载提示 */
+.loading {
+    margin-top: 18px;
+    font-weight: 500;
+    text-align: center;
+    color: #666;
+}
+
+/* 进度条 */
+.progress {
+    width: 100%;
+    background-color: #e5e7eb;
+    border-radius: 8px;
+    margin-top: 12px;
+    height: 20px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    text-align: center;
+    line-height: 20px;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: width 0.3s ease;
+}
+
+/* 日志结果区 */
+.result {
+    white-space: pre-wrap;
+    background: #f8f9fb;
+    padding: 14px;
+    margin-top: 22px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    color: #333;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+}
