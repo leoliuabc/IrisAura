@@ -3,8 +3,8 @@ name: Build IrisAura
 on:
   push:
     tags:
-      - 'v1.0.0'
-  workflow_dispatch: # 可手动触发
+      - 'v*.*.*'
+  workflow_dispatch:
 
 env:
   APP_NAME: IrisAura
@@ -12,27 +12,22 @@ env:
   FRONTEND_DIR: frontend
 
 jobs:
-  # ==========================
-  # macOS 构建 + Universal
-  # ==========================
-  macos:
+  build-all:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        os: [windows, macos]
+        win_arch: [amd64, arm64]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/setup-go@v4
         with:
           go-version: '1.21'
 
-      - name: Install Wails CLI
-        run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@latest
-          echo "${{ github.workspace }}/go/bin" >> $GITHUB_PATH
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Install Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -48,48 +43,37 @@ jobs:
           go mod download
 
       # ----------------------
-      # 构建 Intel
+      # 准备所有目录
       # ----------------------
-      - name: Build Intel (amd64)
+      - name: Prepare build directories
         run: |
-          echo "🔹 Building Intel (amd64)..."
-          GOOS=darwin GOARCH=amd64 wails build -platform darwin/amd64
           mkdir -p build/bin/macos/amd64
-          if [ ! -d build/bin/${{ env.APP_NAME }}.app ]; then
-            echo "❌ Intel build failed: app not found!"
-            exit 1
-          fi
+          mkdir -p build/bin/macos/arm64
+          mkdir -p build/bin/macos/Universal
+          mkdir -p build/bin/windows/amd64
+          mkdir -p build/bin/windows/arm64
+
+      # ==========================
+      # macOS 构建
+      # ==========================
+      - name: Build macOS Intel
+        if: matrix.os == 'macos'
+        run: |
+          echo "🔹 Building macOS Intel..."
+          wails build -platform darwin/amd64
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
 
-      # ----------------------
-      # 构建 ARM64
-      # ----------------------
-      - name: Build ARM64
+      - name: Build macOS ARM
+        if: matrix.os == 'macos'
         run: |
-          echo "🔹 Building ARM64..."
-          GOOS=darwin GOARCH=arm64 wails build -platform darwin/arm64
-          mkdir -p build/bin/macos/arm64
-          if [ ! -d build/bin/${{ env.APP_NAME }}.app ]; then
-            echo "❌ ARM64 build failed: app not found!"
-            exit 1
-          fi
+          echo "🔹 Building macOS ARM..."
+          wails build -platform darwin/arm64
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
 
-      # ----------------------
-      # 合并 Universal
-      # ----------------------
-      - name: Create Universal app
+      - name: Build macOS Universal
+        if: matrix.os == 'macos'
         run: |
-          echo "🔹 Creating Universal app..."
-          mkdir -p build/bin/macos/Universal
-          if [ ! -d build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app ]; then
-            echo "❌ Intel app missing, cannot merge!"
-            exit 1
-          fi
-          if [ ! -d build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app ]; then
-            echo "❌ ARM64 app missing, cannot merge!"
-            exit 1
-          fi
+          echo "🔹 Creating macOS Universal..."
           cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
           lipo -create \
             build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app/Contents/MacOS/${{ env.APP_NAME }} \
@@ -98,6 +82,7 @@ jobs:
           codesign --deep --force --sign - build/bin/macos/Universal/${{ env.APP_NAME }}.app
 
       - name: Upload macOS Universal release
+        if: matrix.os == 'macos'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
@@ -105,62 +90,21 @@ jobs:
           files: build/bin/macos/Universal/*
           token: ${{ secrets.GH_TOKEN }}
 
-  # ==========================
-  # Windows 构建
-  # ==========================
-  windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Install Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Build frontend
-        working-directory: ${{ env.FRONTEND_DIR }}
+      # ==========================
+      # Windows 构建
+      # ==========================
+      - name: Build Windows
+        if: matrix.os == 'windows'
         run: |
-          npm ci
-          npm run build
+          for arch in "${{ matrix.win_arch[@] }}"; do
+            echo "🔹 Building Windows $arch..."
+            GOOS=windows GOARCH=$arch wails build -platform windows/$arch
+            mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/$arch/${{ env.APP_NAME }}-$arch.exe
+          done
 
-      - name: Go mod tidy & download
+      - name: Upload Windows releases
+        if: matrix.os == 'windows'
         run: |
-          go mod tidy
-          go mod download
-
-      - name: Build Wails app
-        shell: bash
-        run: |
-          echo "🔹 Building Windows (${{ matrix.arch }})..."
-          GOOS=windows GOARCH=${{ matrix.arch }} wails build -platform windows/${{ matrix.arch }}
-          if [ ! -f build/bin/${{ env.APP_NAME }}.exe ]; then
-            echo "❌ Windows build failed: exe not found!"
-            exit 1
-          fi
-
-      - name: Organize Windows build
-        shell: bash
-        run: |
-          mkdir -p build/bin/windows/${{ matrix.arch }}
-          mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/${{ matrix.arch }}/${{ env.APP_NAME }}-${{ matrix.arch }}.exe
-
-      - name: Upload Windows release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: IrisAura-Windows-${{ matrix.arch }}
-          files: build/bin/windows/${{ matrix.arch }}/*
-          token: ${{ secrets.GH_TOKEN }}
+          for arch in "${{ matrix.win_arch[@] }}"; do
+            gh release upload ${{ github.ref_name }} build/bin/windows/$arch/${{ env.APP_NAME }}-$arch.exe --clobber
+          done
