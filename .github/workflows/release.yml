@@ -3,7 +3,7 @@ name: Build IrisAura
 on:
   push:
     tags:
-      - 'v1.0.0'
+      - 'v*.*.*'
   workflow_dispatch:
 
 env:
@@ -12,12 +12,11 @@ env:
   FRONTEND_DIR: frontend
 
 jobs:
-  build-all:
+  # ==========================
+  # macOS 构建 + Universal
+  # ==========================
+  macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        os: [windows, macos]
-        win_arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v3
 
@@ -42,39 +41,30 @@ jobs:
           go mod tidy
           go mod download
 
-      # ----------------------
-      # 准备所有目录
-      # ----------------------
-      - name: Prepare build directories
+      - name: Prepare macOS directories
         run: |
           mkdir -p build/bin/macos/amd64
           mkdir -p build/bin/macos/arm64
           mkdir -p build/bin/macos/Universal
-          mkdir -p build/bin/windows/amd64
-          mkdir -p build/bin/windows/arm64
 
-      # ==========================
-      # macOS 构建
-      # ==========================
-      - name: Build macOS Intel
-        if: matrix.os == 'macos'
+      - name: Build Intel (amd64)
         run: |
-          echo "🔹 Building macOS Intel..."
+          echo "🔹 Building Intel (amd64)..."
           wails build -platform darwin/amd64
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app
 
-      - name: Build macOS ARM
-        if: matrix.os == 'macos'
+      - name: Build ARM64
         run: |
-          echo "🔹 Building macOS ARM..."
+          echo "🔹 Building ARM64..."
           wails build -platform darwin/arm64
           mv build/bin/${{ env.APP_NAME }}.app build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app
 
-      - name: Build macOS Universal
-        if: matrix.os == 'macos'
+      - name: Build Universal
         run: |
           echo "🔹 Creating macOS Universal..."
+          # 先复制 Intel
           cp -R build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app build/bin/macos/Universal/${{ env.APP_NAME }}.app
+          # 再合并二进制
           lipo -create \
             build/bin/macos/amd64/${{ env.APP_NAME }}-intel.app/Contents/MacOS/${{ env.APP_NAME }} \
             build/bin/macos/arm64/${{ env.APP_NAME }}-arm64.app/Contents/MacOS/${{ env.APP_NAME }} \
@@ -82,7 +72,6 @@ jobs:
           codesign --deep --force --sign - build/bin/macos/Universal/${{ env.APP_NAME }}.app
 
       - name: Upload macOS Universal release
-        if: matrix.os == 'macos'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
@@ -90,21 +79,53 @@ jobs:
           files: build/bin/macos/Universal/*
           token: ${{ secrets.GH_TOKEN }}
 
-      # ==========================
-      # Windows 构建
-      # ==========================
-      - name: Build Windows
-        if: matrix.os == 'windows'
-        run: |
-          for arch in "${{ matrix.win_arch[@] }}"; do
-            echo "🔹 Building Windows $arch..."
-            GOOS=windows GOARCH=$arch wails build -platform windows/$arch
-            mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/$arch/${{ env.APP_NAME }}-$arch.exe
-          done
+  # ==========================
+  # Windows 构建
+  # ==========================
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v3
 
-      - name: Upload Windows releases
-        if: matrix.os == 'windows'
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build frontend
+        working-directory: ${{ env.FRONTEND_DIR }}
         run: |
-          for arch in "${{ matrix.win_arch[@] }}"; do
-            gh release upload ${{ github.ref_name }} build/bin/windows/$arch/${{ env.APP_NAME }}-$arch.exe --clobber
-          done
+          npm ci
+          npm run build
+
+      - name: Go mod tidy & download
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Prepare Windows directories
+        run: |
+          mkdir -p build/bin/windows/amd64
+          mkdir -p build/bin/windows/arm64
+
+      - name: Build Windows
+        shell: bash
+        run: |
+          GOOS=windows GOARCH=${{ matrix.arch }} wails build -platform windows/${{ matrix.arch }}
+          mv build/bin/${{ env.APP_NAME }}.exe build/bin/windows/${{ matrix.arch }}/${{ env.APP_NAME }}-${{ matrix.arch }}.exe
+
+      - name: Upload Windows release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: IrisAura-Windows-${{ matrix.arch }}
+          files: build/bin/windows/${{ matrix.arch }}/*
+          token: ${{ secrets.GH_TOKEN }}
